@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Project ForLife - Jigsaw Puzzle</title>
+<style>
+  :root{
+    --bg:#f0f7f4; --card:#ffffff; --primary:#00509e; 
+    --secondary:#4caf50; --accent:#ff9800; --danger:#e74c3c; --ink:#2d3436;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;font-family:"Segoe UI", system-ui, sans-serif;
+    background:var(--bg);color:var(--ink);overflow:hidden;user-select:none;}
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;
+    align-items:center;justify-content:center;padding:16px;gap:18px; text-align:center;}
+  .screen.active{display:flex;}
+  h1{font-size:clamp(24px,5vw,42px);margin:0;color:var(--primary);}
+  h2{font-size:clamp(18px,3.5vw,28px);margin:0;}
+  
+  button{font-family:inherit;border:none;border-radius:20px;cursor:pointer;
+    font-size:clamp(16px,3vw,22px);padding:14px 28px;font-weight:bold;
+    color:#fff;background:var(--primary);box-shadow:0 6px 0 rgba(0,0,0,.15);
+    transition:transform .08s; position: relative; z-index: 9999;}
+  button:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(0,0,0,.15);}
+  button.green{background:var(--secondary);}
+  button.orange{background:var(--accent);}
+  button.red{background:var(--danger);}
+  button.small{font-size:clamp(14px,2.5vw,16px);padding:10px 16px;border-radius:12px;}
+
+  #btnExit {
+    position: absolute; top: 20px; right: 20px; 
+    width: 50px; height: 50px; border-radius: 50%; 
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; padding: 0; z-index: 9999;
+  }
+
+  .logos-top { display: flex; gap: 30px; align-items: center; justify-content: center; margin-bottom: 10px; flex-wrap: wrap;}
+  .logos-top svg, .logos-top img { height: clamp(60px, 12vw, 90px); width: auto; object-fit: contain; }
+  
+  #start .hero-text { font-size: clamp(16px, 3vw, 24px); color: var(--secondary); font-weight: bold; margin-bottom: 10px;}
+  
+  .thumbs{display:flex;gap:16px;flex-wrap:wrap;justify-content:center; max-width: 1000px;}
+  .thumb{width:clamp(140px,28vw,260px);aspect-ratio:1;border-radius:16px;
+    overflow:hidden;border:6px solid #fff;box-shadow:0 8px 24px rgba(0,0,0,.15);
+    cursor:pointer;position:relative;transition:transform .15s; background: #fff;}
+  .thumb:hover{transform:translateY(-5px) scale(1.02);}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
+  .thumb .play{position:absolute;inset:0;display:flex;align-items:center;
+    justify-content:center;font-size:clamp(32px,6vw,48px);
+    background:rgba(0,0,0,.15); color: white; text-shadow: 0 2px 10px rgba(0,0,0,0.5);}
+  
+  #game{padding:8px; justify-content:flex-start; z-index: 5;}
+  #gameTop{display:flex;gap:12px;align-items:center;justify-content:center;
+    flex-wrap:wrap;width:100%; z-index: 9999; flex-shrink: 0; padding-top: 10px; position: relative;}
+  
+  #boardWrap{flex:1;display:flex;align-items:center;justify-content:center;
+    width:100%;min-height:0; margin: 10px 0; overflow: hidden; z-index: 1;}
+  
+  #trayWrap{width:100%;display:flex;justify-content:center; flex-shrink: 0; padding-bottom: 10px; z-index: 10; position: relative;}
+
+  #board{position:relative;background:#fff;border-radius:12px;
+    box-shadow:0 8px 30px rgba(0,0,0,.2);touch-action:none;overflow:hidden;
+    border: 4px solid var(--primary); display: flex;}
+  .slot{position:absolute;border:2px dashed rgba(0,0,0,.1);
+    background:rgba(240,247,244,.6);}
+  .slot.filled{border-color:transparent;background:transparent;}
+
+  #tray{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
+    padding:10px;background:#fff;border-radius:16px;
+    box-shadow:0 4px 14px rgba(0,0,0,.08);max-width:96vw; border: 2px solid #e0e0e0;
+    min-height: 70px;}
+  
+  .piece{position:absolute;background-repeat:no-repeat;border-radius:4px;
+    box-shadow:0 3px 6px rgba(0,0,0,.3);cursor:grab;touch-action:none;
+    transition:box-shadow .1s;}
+  .piece.dragging{cursor:grabbing;box-shadow:0 12px 24px rgba(0,0,0,.4);
+    z-index:999;transition:none;}
+  .piece.tray{position:relative;}
+
+  .confetti{position:absolute;width:10px;height:10px;border-radius:2px;
+    pointer-events:none;animation:fall 1.4s ease-out forwards;z-index:1000;}
+  @keyframes fall{to{transform:translateY(60vh) rotate(540deg);opacity:0;}}
+
+  #win .big{font-size:clamp(48px,12vw,96px); animation: bounce 1s infinite;}
+  @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
+  .row{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;}
+
+  .diffBtn{display:flex;flex-direction:column;align-items:center;gap:8px; width: 120px;}
+  .dots{display:grid;gap:4px;}
+  .dot{width:16px;height:16px;border-radius:4px;background:rgba(255,255,255,.85);}
+</style>
+</head>
+<body>
+
+<div class="screen active" id="start">
+  <button class="red" id="btnExit" title="Avsluta">✖</button>
+
+  <div class="logos-top">
+    <svg viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="10" width="80" height="80" rx="8" fill="#003399"/>
+      <g fill="#FFCC00">
+        <circle cx="40" cy="30" r="4"/><circle cx="25" cy="40" r="4"/><circle cx="55" cy="40" r="4"/>
+        <circle cx="25" cy="60" r="4"/><circle cx="55" cy="60" r="4"/><circle cx="40" cy="70" r="4"/>
+        <circle cx="15" cy="50" r="4"/><circle cx="65" cy="50" r="4"/>
+      </g>
+      <text x="95" y="45" font-family="Arial, sans-serif" font-weight="bold" font-size="36" fill="#003399">Erasmus+</text>
+      <text x="95" y="75" font-family="Arial, sans-serif" font-size="16" fill="#003399">Enriching lives, opening minds.</text>
+    </svg>
+
+    <img src="bilder/logo.png" alt="Project ForLife" 
+         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    
+    <svg viewBox="0 0 300 150" xmlns="http://www.w3.org/2000/svg" style="display:none;">
+      <path d="M 150 20 A 100 100 0 1 1 149 20" fill="none" stroke="#4caf50" stroke-width="8" stroke-dasharray="10 10"/>
+      <circle cx="150" cy="80" r="45" fill="#e3f2fd"/>
+      <path d="M 120 60 Q 150 40 180 60 Q 170 80 150 90 Q 130 80 120 60" fill="#4caf50"/>
+      <path d="M 130 100 Q 150 110 170 95 Q 160 80 140 90" fill="#4caf50"/>
+      <path d="M 150 35 Q 180 10 190 30 Q 170 40 150 35" fill="#81c784"/>
+      <path d="M 150 35 Q 120 10 110 30 Q 130 40 150 35" fill="#4caf50"/>
+      <circle cx="100" cy="110" r="8" fill="#00509e"/>
+      <path d="M 100 118 L 100 135 L 90 150 L 110 150 L 100 135" fill="#00509e"/>
+      <circle cx="200" cy="110" r="8" fill="#00509e"/>
+      <path d="M 200 118 L 200 135 L 190 150 L 210 150 L 200 135" fill="#00509e"/>
+      <circle cx="150" cy="115" r="10" fill="#4caf50"/>
+      <path d="M 150 125 L 150 145 L 135 150 L 165 150 L 150 145" fill="#4caf50"/>
+      <text x="150" y="20" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#00509e" text-anchor="middle">Project</text>
+      <text x="150" y="145" font-family="Arial, sans-serif" font-weight="bold" font-size="28" fill="#4caf50" text-anchor="middle">ForLife</text>
+    </svg>
+  </div>
+  
+  <div class="hero-text">Skapa och spela pussel! 🧩</div>
+  
+  <div class="row">
+    <button class="green" id="btnPlayDemo">▶ Spela med projektets bilder</button>
+    <button class="orange small" id="btnLoad">📷 Ladda egna bilder</button>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" multiple hidden>
+</div>
+
+<div class="screen" id="pick">
+  <h2>Välj en bild att pussla 🖼️</h2>
+  <div class="thumbs" id="thumbs"></div>
+  <button class="small orange" id="btnBackStart">⬅ Tillbaka</button>
+</div>
+
+<div class="screen" id="diff">
+  <h2>Hur många pusselbitar?</h2>
+  <div class="row" id="diffRow"></div>
+  <button class="small orange" id="btnBackPick">⬅ Tillbaka</button>
+</div>
+
+<div class="screen" id="game">
+  <div id="gameTop">
+    <button class="small orange" id="btnQuit">✖ Avbryt</button>
+    <button class="small orange" id="btnShuffle">🔀 Blanda om</button>
+    <button class="small" id="btnHint" style="background:var(--secondary);">💡 Kika</button>
+  </div>
+  <div id="boardWrap"><div id="board"></div></div>
+  <div id="trayWrap"><div id="tray"></div></div>
+</div>
+
+<div class="screen" id="win">
+  <div class="big">🎉</div>
+  <h1>Snyggt jobbat!</h1>
+  <div class="row">
+    <button class="green" id="btnNext">➡ Nästa bild</button>
+    <button class="orange" id="btnAgain">🔁 Spela igen</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const state = { images: [], current: 0, grid: 3, boardSize: 0, placed: 0, total: 0, started: false };
+const $ = id => document.getElementById(id);
+const screens = ["start","pick","diff","game","win"];
+function show(id){ screens.forEach(s=>$(s).classList.toggle("active", s===id)); }
+
+const FORLIFE_IMAGES = [
+    "bilder/bild1.png", 
+    "bilder/bild2.png", 
+    "bilder/bild3.png", 
+    "bilder/logo.png" 
+];
+
+// X (EXIT) på startskärmen
+$("btnExit").addEventListener("click", ()=>{
+    if(confirm("Vill du stänga av pusselspelet?")) { 
+        window.close(); 
+        // Om webbläsaren vägrar stänga, visa ett meddelande
+        setTimeout(()=>alert("Du kan stänga fliken manuellt."), 100);
+    }
+});
+
+$("btnPlayDemo").addEventListener("click", ()=>{
+  state.images = FORLIFE_IMAGES; buildThumbs(); show("pick"); beep(720,0.1);
+});
+
+$("btnLoad").addEventListener("click", ()=>$("fileInput").click());
+$("fileInput").addEventListener("change", e=>{
+  const files = [...e.target.files].filter(f=>f.type.startsWith("image/"));
+  if(!files.length) return;
+  state.images = [];
+  let loaded = 0;
+  files.slice(0,6).forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = ev=>{
+      state.images.push(ev.target.result);
+      if(++loaded === Math.min(files.length,6)){
+        buildThumbs(); show("pick"); beep(720,0.1);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = "";
+});
+
+let AC = null;
+function beep(freq=660, dur=0.08, type="sine", gain=0.06){
+  try{
+    AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.value = freq; g.gain.value = gain;
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime + dur);
+  }catch(e){}
+}
+function snapSound(){ beep(880,0.07,"triangle",0.08); setTimeout(()=>beep(1180,0.09,"triangle",0.07),60); }
+function winSound(){ [660,880,1100,1320].forEach((f,i)=>setTimeout(()=>beep(f,0.12,"sine",0.08), i*140)); }
+
+function buildThumbs(){
+  const box = $("thumbs"); box.innerHTML = "";
+  state.images.forEach((src, i)=>{
+    const d = document.createElement("div");
+    d.className = "thumb";
+    d.innerHTML = `<img src="${src}" alt="Bild"><div class="play">▶</div>`;
+    d.addEventListener("click", ()=>{ state.current = i; openDifficulty(); });
+    box.appendChild(d);
+  });
+}
+$("btnBackStart").addEventListener("click", ()=>show("start"));
+$("btnBackPick").addEventListener("click", ()=>show("pick"));
+
+function openDifficulty(){
+  const row = $("diffRow"); row.innerHTML = "";
+  const opts = [
+    {n:2, label:"Lätt", color:"var(--secondary)"},
+    {n:3, label:"Medel", color:"var(--primary)"},
+    {n:4, label:"Svår", color:"var(--accent)", dark:true}
+  ];
+  opts.forEach(o=>{
+    const b = document.createElement("button");
+    b.className = "diffBtn"; b.style.background = o.color;
+    if(o.dark) b.style.color = "#2d3436";
+    const dots = document.createElement("div"); dots.className = "dots";
+    dots.style.gridTemplateColumns = `repeat(${o.n},16px)`;
+    for(let i=0;i<o.n*o.n;i++){
+      const d = document.createElement("div"); d.className = "dot";
+      d.style.background = o.dark ? "rgba(45,52,54,.4)" : "rgba(255,255,255,.85)";
+      dots.appendChild(d);
+    }
+    b.innerHTML = `<span style="font-size:1.1em">${o.label}</span>`;
+    b.appendChild(dots);
+    b.addEventListener("click", ()=>startGame(o.n));
+    row.appendChild(b);
+  });
+  show("diff");
+}
+
+function startGame(grid){
+  state.grid = grid;
+  state.placed = 0;
+  state.total = grid*grid;
+  state.started = true;
+
+  const board = $("board");
+  const tray  = $("tray");
+  board.innerHTML = ""; tray.innerHTML = "";
+
+  // Rensa bort eventuella lösa bitar som ligger och skräpar i body
+  document.querySelectorAll(".piece").forEach(el => el.remove());
+
+  const src = state.images[state.current];
+  const img = new Image();
+  
+  img.onload = ()=>{
+    // Skala ner bilden om den är gigantisk
+    const maxDimension = 1200;
+    let imgW = img.width;
+    let imgH = img.height;
+    
+    if (imgW > maxDimension || imgH > maxDimension) {
+        const ratio = Math.min(maxDimension / imgW, maxDimension / imgH);
+        imgW = Math.floor(imgW * ratio);
+        imgH = Math.floor(imgH * ratio);
+    }
+
+    const availW = window.innerWidth * 0.9;
+    const availH = window.innerHeight * 0.6;
+    
+    const imgRatio = imgW / imgH;
+    let boardW, boardH;
+
+    if (availW / availH > imgRatio) {
+        boardH = availH;
+        boardW = availH * imgRatio;
+    } else {
+        boardW = availW;
+        boardH = availW / imgRatio;
+    }
+
+    state.boardSize = boardW;
+    board.style.width  = boardW + "px";
+    board.style.height = boardH + "px";
+
+    const slotW = boardW / grid;
+    const slotH = boardH / grid;
+
+    for(let r=0;r<grid;r++){
+      for(let c=0;c<grid;c++){
+        const s = document.createElement("div");
+        s.className = "slot";
+        s.style.width  = (slotW-2) + "px";
+        s.style.height = (slotH-2) + "px";
+        s.style.left   = (c*slotW+1) + "px";
+        s.style.top    = (r*slotH+1) + "px";
+        s.dataset.r = r; s.dataset.c = c;
+        board.appendChild(s);
+      }
+    }
+
+    const pieces = [];
+    for(let r=0;r<grid;r++){
+      for(let c=0;c<grid;c++){ pieces.push({r,c}); }
+    }
+    for(let i=pieces.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [pieces[i],pieces[j]] = [pieces[j],pieces[i]];
+    }
+
+    const trayPieceW = Math.max(40, Math.min(80, Math.floor(availW / (grid * 1.5))));
+    const trayPieceH = trayPieceW / imgRatio;
+
+    pieces.forEach(p=>{
+      const el = document.createElement("div");
+      el.className = "piece tray";
+      el.style.width  = trayPieceW + "px";
+      el.style.height = trayPieceH + "px";
+      
+      const scaleX = trayPieceW * grid / imgW;
+      const scaleY = trayPieceH * grid / imgH;
+
+      const fullW = imgW * scaleX;
+      const fullH = imgH * scaleY;
+
+      el.style.backgroundImage = `url("${src}")`;
+      el.style.backgroundSize = `${fullW}px ${fullH}px`;
+      el.style.backgroundPosition = `-${p.c * trayPieceW}px -${p.r * trayPieceH}px`;
+      
+      el.dataset.r = p.r; el.dataset.c = p.c;
+      el._trayW = trayPieceW;
+      el._trayH = trayPieceH;
+      
+      makeDraggable(el);
+      tray.appendChild(el);
+    });
+
+    show("game");
+  };
+  
+  img.onerror = ()=>{ 
+      alert("Kunde inte ladda bilden: " + src); 
+      show("pick"); 
+  };
+  img.src = src;
+}
+
+function makeDraggable(el){
+  let startX=0, startY=0, offsetX=0, offsetY=0, dragging=false;
+  function down(e){
+    if(el.classList.contains("locked")) return;
+    e.preventDefault();
+    const pt = point(e); dragging = true;
+    el.classList.add("dragging");
+    const rect = el.getBoundingClientRect();
+    offsetX = pt.x - rect.left; offsetY = pt.y - rect.top;
+    startX = pt.x; startY = pt.y;
+
+    document.body.appendChild(el);
+    el.style.position = "fixed"; el.style.left = rect.left + "px"; el.style.top  = rect.top  + "px";
+    el.style.width  = rect.width  + "px"; el.style.height = rect.height + "px";
+    
+    const k = rect.width / el._trayW;
+    const bs = el.style.backgroundSize.split(" ");
+    if(bs.length===2){ el.style.backgroundSize = `${parseFloat(bs[0])*k}px ${parseFloat(bs[1])*k}px`; }
+    const bp = el.style.backgroundPosition.split(" ");
+    if(bp.length===2){ el.style.backgroundPosition = `${parseFloat(bp[0])*k}px ${parseFloat(bp[1])*k}px`; }
+    
+    el._trayW = rect.width;
+    el._trayH = rect.height;
+
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+    document.addEventListener("touchmove", move, {passive:false});
+    document.addEventListener("touchend", up);
+  }
+  function move(e){
+    if(!dragging) return;
+    e.preventDefault();
+    const pt = point(e);
+    el.style.left = (pt.x - offsetX) + "px"; el.style.top  = (pt.y - offsetY) + "px";
+  }
+  function up(e){
+    if(!dragging) return;
+    dragging = false; el.classList.remove("dragging");
+    document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up);
+    document.removeEventListener("touchmove", move); document.removeEventListener("touchend", up);
+
+    const pt = point(e) || {x:startX, y:startY};
+    const correct = findCorrectSlot(el, pt);
+    if(correct){ snapToSlot(el, correct); } else { returnToTray(el); }
+  }
+  el.addEventListener("mousedown", down);
+  el.addEventListener("touchstart", down, {passive:false});
+}
+
+function point(e){
+  if(!e) return null;
+  if(e.touches && e.touches[0]) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
+  if(e.changedTouches && e.changedTouches[0]) return {x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY};
+  return {x:e.clientX, y:e.clientY};
+}
+
+function findCorrectSlot(el, pt){
+  const board = $("board");
+  const boardRect = board.getBoundingClientRect();
+  if(pt.x < boardRect.left || pt.x > boardRect.right || pt.y < boardRect.top || pt.y > boardRect.bottom) return null;
+
+  const r = +el.dataset.r, c = +el.dataset.c;
+  const slots = board.querySelectorAll(".slot");
+  for(const s of slots){
+    if(+s.dataset.r === r && +s.dataset.c === c){
+      if(s.classList.contains("filled")) return null;
+      const sr = s.getBoundingClientRect();
+      const cx = sr.left + sr.width/2; const cy = sr.top  + sr.height/2;
+      const dist = Math.hypot(pt.x - cx, pt.y - cy); const tolerance = Math.max(sr.width, sr.height) * 0.8;
+      return dist <= tolerance ? s : null;
+    }
+  }
+  return null;
+}
+
+function snapToSlot(el, slot){
+  const board = $("board");
+  const sr = slot.getBoundingClientRect(); const br = board.getBoundingClientRect();
+
+  el.style.position = "absolute";
+  el.style.left = (sr.left - br.left) + "px"; el.style.top  = (sr.top  - br.top ) + "px";
+  el.style.width  = sr.width  + "px"; el.style.height = sr.height + "px";
+  el.classList.remove("tray"); el.classList.add("locked");
+  board.appendChild(el); slot.classList.add("filled");
+  slot.style.zIndex = 0; el.style.zIndex = 1;
+
+  const k = sr.width / el._trayW;
+  const bs = el.style.backgroundSize.split(" ");
+  if(bs.length===2){ el.style.backgroundSize = `${parseFloat(bs[0])*k}px ${parseFloat(bs[1])*k}px`; }
+  const bp = el.style.backgroundPosition.split(" ");
+  if(bp.length===2){ el.style.backgroundPosition = `${parseFloat(bp[0])*k}px ${parseFloat(bp[1])*k}px`; }
+  
+  el._trayW = sr.width;
+  el._trayH = sr.height;
+
+  snapSound(); confettiAt(sr.left + sr.width/2, sr.top + sr.height/2);
+  state.placed++;
+  if(state.placed === state.total) setTimeout(win, 400);
+}
+
+function returnToTray(el){
+  const tray = $("tray");
+  el.style.position = ""; el.style.left = ""; el.style.top = "";
+  el.style.width  = el._trayW + "px"; el.style.height = el._trayH + "px";
+  el.classList.add("tray"); tray.appendChild(el);
+}
+
+function confettiAt(x, y){
+  const colors = ["#00509e","#4caf50","#ff9800","#e91e63","#9c27b0"];
+  for(let i=0;i<12;i++){
+    const d = document.createElement("div"); d.className = "confetti";
+    d.style.left = x + "px"; d.style.top  = y + "px";
+    d.style.background = colors[i%colors.length];
+    d.style.animationDelay = (Math.random()*0.15) + "s";
+    d.style.transform = `translateX(${(Math.random()-0.5)*120}px)`;
+    document.body.appendChild(d); setTimeout(()=>d.remove(), 1600);
+  }
+}
+
+function win(){
+  winSound(); show("win");
+  for(let i=0;i<40;i++){
+    setTimeout(()=>confettiAt(window.innerWidth*Math.random(), window.innerHeight*0.3*Math.random()), i*40);
+  }
+}
+
+// FIX FÖR AVBRYT: Tar bort alla pusselbitar som ligger i body och går tillbaka
+$("btnQuit").addEventListener("click", ()=>{
+    document.querySelectorAll(".piece").forEach(el => el.remove());
+    show("pick"); 
+});
+
+$("btnShuffle").addEventListener("click", ()=>startGame(state.grid));
+$("btnHint").addEventListener("click", ()=>{
+  const board = $("board");
+  const ov = document.createElement("div");
+  ov.style.cssText = `position:absolute;inset:0;background:url("${state.images[state.current]}") center/contain no-repeat;background-color:#fff;border-radius:12px;opacity:.95;z-index:50;pointer-events:none;`;
+  board.appendChild(ov); setTimeout(()=>ov.remove(), 1200);
+});
+$("btnNext").addEventListener("click", ()=>{
+  state.current = (state.current + 1) % state.images.length; openDifficulty();
+});
+$("btnAgain").addEventListener("click", ()=>startGame(state.grid));
+window.addEventListener("resize", ()=>{ if($("game").classList.contains("active") && state.started){ startGame(state.grid); } });
+</script>
+</body>
+</html>
